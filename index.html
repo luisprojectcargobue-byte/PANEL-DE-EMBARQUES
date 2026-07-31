@@ -286,6 +286,39 @@
   tr.atendida{ opacity: 0.4; }
   tr.atendida td:not(.chk-cell){ text-decoration: line-through; }
 
+  /* ---------- Extensión de Cut Off ---------- */
+  .ext-add{
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    border: 1px dashed var(--line);
+    border-radius: 5px;
+    padding: 4px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    background: transparent;
+  }
+  .ext-add:hover{ border-color: var(--ink-dim); color: var(--ink); }
+  .ext-badge{
+    display:inline-flex;
+    align-items:center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--teal);
+    border-radius: 4px;
+    padding: 5px 9px;
+    cursor: pointer;
+    max-width: 160px;
+  }
+  .ext-badge span.txt{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
   /* ---------- Encabezados ordenables ---------- */
   th.sortable{ cursor: pointer; user-select: none; white-space: nowrap; }
   th.sortable:hover{ color: var(--ink); }
@@ -513,7 +546,7 @@
 
       <div class="modal-section">
         <label>Importación</label>
-        <div class="cols-hint">Orden: ETA (M/D/AAAA HH:mm) · NAVIERA · CLIENTE · POD · POL</div>
+        <div class="cols-hint">Orden: OPERACION · ETA (M/D/AAAA HH:mm) · NAVIERA · CLIENTE · POD · POL</div>
         <textarea id="input-importacion" spellcheck="false"></textarea>
       </div>
 
@@ -528,7 +561,7 @@
   <div class="modal-overlay" id="modal-alerta-overlay">
     <div class="modal-box" style="max-width:520px;">
       <h2>Alerta urgente para todo el equipo</h2>
-      <div class="modal-sub">Aparece como banner fijo arriba del dashboard, en cualquier pestaña, sin interrumpir la rotación.</div>
+      <div class="modal-sub">Aparece como banner fijo arriba del dashboard, en cualquier pestaña, sin interrumpir la rotación. Se sincroniza al instante en todas las computadoras que tengan la página abierta, y avisa por Teams a Martín.</div>
       <div class="modal-section">
         <label>Mensaje</label>
         <textarea id="input-alerta" spellcheck="false" style="min-height:70px;" placeholder="Ej: Contenedor CME005209 no ingresó a puerto — urgente coordinar con naviera"></textarea>
@@ -590,6 +623,7 @@
         <th class="sortable" data-field="tipoCtr">Tipo Ctr<span class="arrow">↕</span></th>
         <th class="sortable" data-field="buque">Buque / Viaje<span class="arrow">↕</span></th>
         <th class="sortable" data-field="cutOffDoc">Cut Off Doc<span class="arrow">↕</span></th>
+        <th>Extensión</th>
         <th class="sortable" data-field="mbl">Numero MBL<span class="arrow">↕</span></th>
         <th class="sortable" data-field="estado">Estado<span class="arrow">↕</span></th>
         <th>✓</th>
@@ -641,6 +675,7 @@
   <table>
     <thead>
       <tr>
+        <th class="sortable" data-field="operacion">Operación<span class="arrow">↕</span></th>
         <th class="sortable" data-field="eta">ETA<span class="arrow">↕</span></th>
         <th class="sortable" data-field="naviera">Naviera<span class="arrow">↕</span></th>
         <th class="sortable" data-field="cliente">Cliente<span class="arrow">↕</span></th>
@@ -656,7 +691,42 @@
   <div class="footer-note">Ordenado por ETA más próximo primero · Editar el array "importacion" para cargar los datos</div>
   </div>
 
+  <!-- Firebase (sincronización de la alerta urgente en tiempo real entre computadoras) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
 <script>
+  // ============================================================
+  // CONFIGURACIÓN DE FIREBASE (sincroniza la alerta urgente entre computadoras)
+  // Falta "databaseURL" — se copia desde la pantalla de Realtime Database
+  // luego de crearla (Compilación → Realtime Database → Crear base de datos).
+  // Se ve como: https://panel-del-embarque-default-rtdb.REGION.firebasedatabase.app
+  // ============================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyC9I2eTpqrXiXoiOvw3fexYm2nP1HfIcyQ",
+    authDomain: "panel-del-embarque.firebaseapp.com",
+    databaseURL: "https://panel-del-embarque-default-rtdb.firebaseio.com",
+    projectId: "panel-del-embarque",
+    storageBucket: "panel-del-embarque.firebasestorage.app",
+    messagingSenderId: "592584059076",
+    appId: "1:592584059076:web:5b50c7d2140cc765c08191"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const dbFirebase = firebase.database();
+
+  // ============================================================
+  // WEBHOOK DE TEAMS (Power Automate) — avisa en el canal, mencionando a Martín
+  // ============================================================
+  const TEAMS_WEBHOOK_URL = "https://default02436c1a5c2b48a98f14fc40280a15.9f.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/29/workflows/138833ce1ab14e58b8b1c151ccd9bb0f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=2H9GfxOgAxFQ4i3S4qHSJBneFC8ZFBVZj-wcWB8x0HI";
+
+  function avisarPorTeams(mensaje){
+    fetch(TEAMS_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: `🚨 **Atención Martín Márquez** — ${mensaje}` })
+    }).catch(err => console.warn("No se pudo avisar por Teams:", err));
+  }
+
   // ============================================================
   // DATOS REALES — pegá acá cada actualización de "SEGUIMIENTO SANTI.xlsx"
   // Columnas: OPERACION, BOOKING, CLIENTE, AGENTE, Tipo Ctr, BUQUE,
@@ -730,7 +800,7 @@
   // Pegá acá las filas cuando tengas los datos — por ahora está vacío.
   // ============================================================
   let importacion = [
-    // { eta:"8/2/2026 0:00", naviera:"MSC", cliente:"MOLFINO", pod:"Buenos Aires", pol:"Santos" },
+    // { operacion:"CME005XXX", eta:"8/2/2026 0:00", naviera:"MSC", cliente:"MOLFINO", pod:"Buenos Aires", pol:"Santos" },
   ];
 
   // ---------- Si hay datos guardados en este navegador, se usan en vez de los de ejemplo ----------
@@ -809,7 +879,11 @@
     const enriquecidos = embarques.map(e => {
       const fecha = parseFecha(e.cutOffDoc);
       const horas = diffHoras(fecha);
-      return { ...e, horas, estado: estadoPorHoras(horas) };
+      let estado = estadoPorHoras(horas);
+      const rowId = "co-" + e.operacion + "-" + e.booking;
+      const ext = extensiones[rowId] || "";
+      if(ext) estado = "ok";
+      return { ...e, horas, estado, rowId, ext };
     });
 
     const s = sortState.cutoff;
@@ -826,7 +900,7 @@
       else ok++;
 
       const tr = document.createElement("tr");
-      const rowId = "co-" + e.operacion + "-" + e.booking;
+      const rowId = e.rowId;
       tr.dataset.rowid = rowId;
       tr.dataset.tabla = "cutoff";
       tr.dataset.estado = e.estado;
@@ -834,7 +908,11 @@
       const yaAtendido = atendidos.has(rowId);
       tr.className = (e.estado === "crit" ? "row-crit" : (e.estado === "warn" ? "row-warn" : "")) + (yaAtendido ? " atendida" : "");
 
-      const badgeLabel = e.estado === "crit" ? "Urgente" : (e.estado === "warn" ? "Próximo" : "Con margen");
+      const badgeLabel = e.ext ? "Extendido" : (e.estado === "crit" ? "Urgente" : (e.estado === "warn" ? "Próximo" : "Con margen"));
+
+      const celdaExt = e.ext
+        ? `<div class="ext-badge" data-rowid="${rowId}" title="${e.ext.replace(/"/g,'&quot;')}">🟢 <span class="txt">${e.ext}</span></div>`
+        : `<button class="ext-add" data-rowid="${rowId}">+ Agregar</button>`;
 
       tr.innerHTML = `
         <td class="operacion">${e.operacion}</td>
@@ -844,10 +922,11 @@
         <td class="mono">${e.tipoCtr}</td>
         <td class="mono">${e.buque} · ${e.viaje}</td>
         <td class="mono">${e.cutOffDoc}</td>
+        <td>${celdaExt}</td>
         <td class="mono">${e.mbl && e.mbl.trim() ? e.mbl : "—"}</td>
         <td>
           <span class="badge ${e.estado}"><span class="dot"></span>${badgeLabel}</span>
-          <div class="countdown">${textoCountdown(e.horas)}</div>
+          <div class="countdown">${e.ext ? e.ext : textoCountdown(e.horas)}</div>
         </td>
         <td class="chk-cell"><div class="chk-atendido ${yaAtendido ? "checked" : ""}" data-rowid="${rowId}"></div></td>
       `;
@@ -917,13 +996,14 @@
 
     ordenados.forEach(e => {
       const tr = document.createElement("tr");
-      const rowId = "im-" + e.eta + "-" + e.cliente + "-" + e.naviera;
+      const rowId = "im-" + e.operacion + "-" + e.cliente;
       tr.dataset.rowid = rowId;
       tr.dataset.tabla = "importacion";
-      tr.dataset.search = [e.naviera, e.cliente, e.pod, e.pol].join(" ").toLowerCase();
+      tr.dataset.search = [e.operacion, e.naviera, e.cliente, e.pod, e.pol].join(" ").toLowerCase();
       const yaAtendido = atendidos.has(rowId);
       tr.className = yaAtendido ? "atendida" : "";
       tr.innerHTML = `
+        <td class="operacion">${e.operacion}</td>
         <td class="mono">${e.eta}</td>
         <td>${e.naviera}</td>
         <td class="cliente">${e.cliente}</td>
@@ -935,7 +1015,7 @@
     });
 
     if(importacion.length === 0){
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--ink-dim); padding:24px;">Todavía no hay cargas cargadas — pegá los datos en el array "importacion"</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--ink-dim); padding:24px;">Todavía no hay cargas cargadas — pegá los datos en el array "importacion"</td></tr>`;
     }
   }
 
@@ -1009,6 +1089,29 @@
       tr.classList.add("atendida");
     }
     guardarAtendidos();
+  });
+
+  // ---------- Extensión de Cut Off Doc (persiste en este navegador) ----------
+  let extensiones;
+  try{
+    extensiones = JSON.parse(localStorage.getItem("panel_extensiones") || "{}");
+  } catch(e){
+    extensiones = {};
+  }
+  function guardarExtensiones(){
+    try{ localStorage.setItem("panel_extensiones", JSON.stringify(extensiones)); } catch(e){}
+  }
+  document.addEventListener("click", (ev) => {
+    const el = ev.target.closest(".ext-add, .ext-badge");
+    if(!el) return;
+    const rowId = el.dataset.rowid;
+    const actual = extensiones[rowId] || "";
+    const val = window.prompt("Detalle de la extensión del Cut Off Doc (ej: \"Extendido hasta 30/07 18hs por naviera\"). Dejalo vacío para quitarla:", actual);
+    if(val === null) return; // canceló
+    if(val.trim() === ""){ delete extensiones[rowId]; } else { extensiones[rowId] = val.trim(); }
+    guardarExtensiones();
+    render();
+    aplicarFiltros();
   });
 
   // ---------- Filtros rápidos + Buscador (combinados) ----------
@@ -1096,7 +1199,7 @@
 
   const camposCutoff = ["operacion","booking","cliente","agente","tipoCtr","buque","viaje","cutOffDoc","mbl"];
   const camposPrealertas = ["operacion","booking","cliente","agente","tipoCtr","buque","viaje","etd"];
-  const camposImportacion = ["eta","naviera","cliente","pod","pol"];
+  const camposImportacion = ["operacion","eta","naviera","cliente","pod","pol"];
 
   const modalOverlay = document.getElementById("modal-overlay");
   const inputCutoffModal = document.getElementById("input-cutoff");
@@ -1137,14 +1240,16 @@
     setTimeout(() => { cerrarModal(); }, 1200);
   });
 
-  // ---------- Alerta urgente (banner persistente, no bloquea el dashboard) ----------
+  // ---------- Alerta urgente (banner persistente, sincronizado por Firebase, no bloquea el dashboard) ----------
   const alertaBanner = document.getElementById("alerta-banner");
   const alertaTexto = document.getElementById("alerta-texto");
   const alertaOverlay = document.getElementById("modal-alerta-overlay");
   const inputAlerta = document.getElementById("input-alerta");
+  const refAlerta = dbFirebase.ref("alertaUrgente");
+  let ultimaAlertaConocida = "";
 
-  function mostrarAlertaGuardada(){
-    const msg = localStorage.getItem("panel_alerta_urgente");
+  function pintarAlerta(msg){
+    ultimaAlertaConocida = msg || "";
     if(msg && msg.trim()){
       alertaTexto.textContent = msg;
       alertaBanner.classList.add("show");
@@ -1152,8 +1257,15 @@
       alertaBanner.classList.remove("show");
     }
   }
+
+  // Escucha cambios en tiempo real — así lo que publica una compu lo ven todas las demás al instante
+  refAlerta.on("value", (snap) => {
+    const val = snap.val();
+    pintarAlerta(val ? val.mensaje : "");
+  });
+
   function abrirModalAlerta(){
-    inputAlerta.value = localStorage.getItem("panel_alerta_urgente") || "";
+    inputAlerta.value = ultimaAlertaConocida;
     alertaOverlay.classList.add("show");
   }
   function cerrarModalAlerta(){ alertaOverlay.classList.remove("show"); }
@@ -1165,23 +1277,19 @@
   document.getElementById("btn-publicar-alerta").addEventListener("click", () => {
     const msg = inputAlerta.value.trim();
     if(msg){
-      try{ localStorage.setItem("panel_alerta_urgente", msg); } catch(e){}
+      refAlerta.set({ mensaje: msg, fecha: new Date().toISOString() });
+      avisarPorTeams(msg);
     }
-    mostrarAlertaGuardada();
     cerrarModalAlerta();
   });
   document.getElementById("btn-quitar-alerta").addEventListener("click", () => {
-    try{ localStorage.removeItem("panel_alerta_urgente"); } catch(e){}
+    refAlerta.remove();
     inputAlerta.value = "";
-    mostrarAlertaGuardada();
     cerrarModalAlerta();
   });
   document.getElementById("alerta-cerrar").addEventListener("click", () => {
-    try{ localStorage.removeItem("panel_alerta_urgente"); } catch(e){}
-    mostrarAlertaGuardada();
+    refAlerta.remove();
   });
-
-  mostrarAlertaGuardada();
 
   render();
   renderPreAlertas();
