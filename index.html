@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Panel de Cut Off — Seguimiento de Embarques</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
   :root{
     --bg: #FFFFFF;
     --bg-panel: #F8FAFC;
@@ -16,7 +17,6 @@
     --mono: 'IBM Plex Mono', 'Courier New', monospace;
     --sans: 'IBM Plex Sans', Arial, sans-serif;
   }
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
   *{ box-sizing: border-box; margin:0; padding:0; }
   html,body{
@@ -720,10 +720,30 @@
   const TEAMS_WEBHOOK_URL = "https://default02436c1a5c2b48a98f14fc40280a15.9f.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/29/workflows/138833ce1ab14e58b8b1c151ccd9bb0f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=2H9GfxOgAxFQ4i3S4qHSJBneFC8ZFBVZj-wcWB8x0HI";
 
   function avisarPorTeams(mensaje){
+    const tarjeta = {
+      type: "AdaptiveCard",
+      "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+      version: "1.4",
+      body: [
+        {
+          type: "TextBlock",
+          text: "🚨 Atención Martín Márquez",
+          weight: "bolder",
+          size: "medium",
+          color: "attention",
+          wrap: true
+        },
+        {
+          type: "TextBlock",
+          text: mensaje,
+          wrap: true
+        }
+      ]
+    };
     fetch(TEAMS_WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: `🚨 **Atención Martín Márquez** — ${mensaje}` })
+      body: JSON.stringify(tarjeta)
     }).catch(err => console.warn("No se pudo avisar por Teams:", err));
   }
 
