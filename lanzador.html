@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Lanzador — Panel TV</title>
+<style>
+  html, body{ margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#0F1B2A; }
+  iframe{ width:100%; height:100%; border:none; display:block; }
+</style>
+</head>
+<body>
+
+  <iframe id="pantalla" src=""></iframe>
+
+<script>
+  // ============================================================
+  // CONFIGURACIÓN — editá esta lista para agregar, quitar o reordenar páginas
+  // "archivo": el nombre del .html (tiene que estar en la misma carpeta/repo)
+  // "segundos": cuánto tiempo se queda en esa página antes de pasar a la siguiente
+  // ============================================================
+  const paginas = [
+    { archivo: "index.html",          segundos: 120 }, // Panel de embarques: 2 minutos
+    { archivo: "cierre-oficina.html", segundos: 120 }, // Cierre de oficina: 2 minutos
+  ];
+
+  let indice = 0;
+  const iframe = document.getElementById("pantalla");
+
+  function mostrarPagina(){
+    iframe.src = paginas[indice].archivo;
+    const espera = paginas[indice].segundos * 1000;
+    indice = (indice + 1) % paginas.length;
+    setTimeout(mostrarPagina, espera);
+  }
+
+  mostrarPagina();
+</script>
+
+</body>
+</html>
