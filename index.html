@@ -825,17 +825,25 @@
     // { cmi:"CMI0001", shipper:"EMPRESA X", cnee:"MOLFINO", etd:"7/28/2026 0:00", eta:"8/2/2026 0:00", pol:"Santos", pod:"Buenos Aires", line:"MSC" },
   ];
 
-  // ---------- Si hay datos guardados en este navegador, se usan en vez de los de ejemplo ----------
-  (function cargarDatosGuardados(){
-    try{
-      const co = localStorage.getItem("panel_data_cutoff");
-      const pa = localStorage.getItem("panel_data_prealertas");
-      const im = localStorage.getItem("panel_data_importacion");
-      if(co) embarques = JSON.parse(co);
-      if(pa) prealertas = JSON.parse(pa);
-      if(im) importacion = JSON.parse(im);
-    } catch(e){ /* si falla, se queda con los datos de ejemplo del archivo */ }
-  })();
+  // ---------- Datos sincronizados por Firebase (en vez de localStorage) ----------
+  // Así, cuando alguien carga datos desde cualquier compu, todas las demás
+  // (incluida la del TV) los ven al instante, sin tener que cargarlos de nuevo.
+  const refDatosCutoff = dbFirebase.ref("datosCutoff");
+  const refDatosPrealertas = dbFirebase.ref("datosPrealertas");
+  const refDatosImportacion = dbFirebase.ref("datosImportacion");
+
+  refDatosCutoff.on("value", (snap) => {
+    const val = snap.val();
+    if(val){ embarques = val; render(); aplicarFiltros(); }
+  });
+  refDatosPrealertas.on("value", (snap) => {
+    const val = snap.val();
+    if(val){ prealertas = val; renderPreAlertas(); aplicarFiltros(); }
+  });
+  refDatosImportacion.on("value", (snap) => {
+    const val = snap.val();
+    if(val){ importacion = val; renderImportacion(); aplicarFiltros(); }
+  });
 
   // Parsea "M/D/AAAA HH:mm" (mes/día/año, como llega de la planilla)
   function parseFecha(str){
@@ -1250,11 +1258,9 @@
     prealertas = parsearFilas(inputPrealertasModal.value, camposPrealertas);
     importacion = parsearFilas(inputImportacionModal.value, camposImportacion);
 
-    try{
-      localStorage.setItem("panel_data_cutoff", JSON.stringify(embarques));
-      localStorage.setItem("panel_data_prealertas", JSON.stringify(prealertas));
-      localStorage.setItem("panel_data_importacion", JSON.stringify(importacion));
-    } catch(e){}
+    refDatosCutoff.set(embarques);
+    refDatosPrealertas.set(prealertas);
+    refDatosImportacion.set(importacion);
 
     render();
     renderPreAlertas();
