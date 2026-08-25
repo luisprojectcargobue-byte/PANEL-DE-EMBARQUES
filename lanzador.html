@@ -27,13 +27,22 @@
   const iframe = document.getElementById("pantalla");
 
   function mostrarPagina(){
-    iframe.src = paginas[indice].archivo;
+    // El "?t=..." al final evita que el navegador use una copia vieja guardada en caché
+    iframe.src = paginas[indice].archivo + "?t=" + Date.now();
     const espera = paginas[indice].segundos * 1000;
     indice = (indice + 1) % paginas.length;
     setTimeout(mostrarPagina, espera);
   }
 
   mostrarPagina();
+
+  // ---------- Auto-recarga del lanzador ----------
+  // Así, si se actualiza este mismo archivo (ej. cambian los tiempos de rotación),
+  // se aplica solo, sin que nadie tenga que ir a la compu a apretar F5.
+  const MINUTOS_ENTRE_RECARGAS = 20;
+  setTimeout(() => {
+    location.href = location.pathname + "?t=" + Date.now();
+  }, MINUTOS_ENTRE_RECARGAS * 60 * 1000);
 </script>
 
 </body>
