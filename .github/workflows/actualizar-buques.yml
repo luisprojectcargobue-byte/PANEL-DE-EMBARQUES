@@ -1,0 +1,27 @@
+name: Actualizar buques en puerto
+
+on:
+  schedule:
+    - cron: "0 9 * * *"   # 06:00 hora Argentina (UTC-3), todos los días
+    - cron: "0 18 * * *"  # 15:00 hora Argentina, segunda actualización del día
+  workflow_dispatch: {}    # permite ejecutarlo a mano desde la pestaña "Actions" de GitHub
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Instalar dependencias
+        run: npm install firebase-admin
+
+      - name: Ejecutar scraper de buques
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scrape-buques.js
