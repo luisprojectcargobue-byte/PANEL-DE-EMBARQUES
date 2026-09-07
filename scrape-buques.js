@@ -1,8 +1,12 @@
 // ============================================================
 // scrape-buques.js
-// Consulta la API pública de AGP (Administración General de Puertos),
-// filtra los arribos de TRP, Terminal 4 (APM) y Exolgan, y los sube
-// a Firebase Realtime Database (mismo lugar que usa el panel del TV).
+// Combina tres fuentes oficiales, una por terminal:
+//  - TRP: API propia de www.trp.com.ar
+//  - Terminal 4: API propia de apps.apmterminals.com.ar
+//  - Exolgan: API pública de NTL (ntlweb.com), agregador que publica
+//    los datos oficiales de Exolgan sin necesitar login
+// y sube el resultado combinado a Firebase Realtime Database
+// (mismo lugar que usa el panel del TV).
 // ============================================================
 
 const admin = require("firebase-admin");
@@ -15,95 +19,114 @@ admin.initializeApp({
 });
 const db = admin.database();
 
-// ---------- Rango de fechas: desde ayer hasta dentro de 14 días ----------
-function formatFecha(d, horaFinal) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd} ${horaFinal ? "23:59:59" : "00:00:00"}`;
+// Convierte "dd/mm/aaaa HH:mm" (formato de TRP y APM) a "M/D/AAAA HH:mm" (formato interno del panel)
+function deFechaConHora(str) {
+  const [fecha, hora] = str.trim().split(" ");
+  const [dd, mm, yyyy] = fecha.split("/").map(Number);
+  return `${mm}/${dd}/${yyyy} ${hora || "00:00"}`;
 }
-const hoy = new Date();
-const desde = new Date(hoy); desde.setDate(desde.getDate() - 1);
-const hasta = new Date(hoy); hasta.setDate(hasta.getDate() + 14);
-const desdeStr = formatFecha(desde, false);
-const hastaStr = formatFecha(hasta, true);
 
-const BASE_URL = "https://api.agp-ports.gob.ar/api/giros/escalas";
+// Convierte "d/m/aaaa" (formato de NTL, sin hora) a "M/D/AAAA HH:mm"
+function deFechaSinHora(str) {
+  const [dd, mm, yyyy] = str.trim().split("/").map(Number);
+  return `${mm}/${dd}/${yyyy} 00:00`;
+}
 
-async function fetchPagina(skip, take) {
-  const url = `${BASE_URL}?fechaIngresoDesde=${encodeURIComponent(desdeStr)}&fechaIngresoHasta=${encodeURIComponent(hastaStr)}&skip=${skip}&take=${take}&idPuerto=3`;
-  const res = await fetch(url, {
+// ---------- TRP ----------
+async function fetchTRP() {
+  const res = await fetch("https://www.trp.com.ar/api/public/vessels/schedule", {
     headers: {
-      "accept": "application/json, text/plain, */*",
+      "accept": "*/*",
       "accept-language": "es-419,es;q=0.9",
-      "origin": "https://agp-ports.gob.ar",
-      "referer": "https://agp-ports.gob.ar/",
+      "referer": "https://www.trp.com.ar/cronogramas/buques",
       "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
   });
   if (!res.ok) {
-    throw new Error(`La API de AGP respondió con estado ${res.status}`);
+    throw new Error(`La API de TRP respondió con estado ${res.status}`);
   }
-  return res.json();
+  const json = await res.json();
+  const filas = json?.payload?.data || [];
+  return filas.map((f) => ({
+    buque: f.shipName || "",
+    terminal: "TRP",
+    naviera: f.lineOperator || "",
+    procedencia: "",
+    eta: deFechaConHora(f.eta),
+  }));
 }
 
-// Determina si un movimiento pertenece a TRP, Terminal 4 (APM) o Exolgan
-function terminalDestino(mov) {
-  const sigla = (mov.terminal?.sigla || "").toUpperCase();
-  const nombre = (mov.terminal?.nombre || "").toLowerCase();
-  if (sigla === "TRP") return "TRP";
-  if (sigla === "APM") return "Terminal 4";
-  if (nombre.includes("exolgan") || sigla === "EXO") return "Exolgan";
-  return null;
+// ---------- Terminal 4 (APM) ----------
+async function fetchAPM() {
+  const res = await fetch("https://apps.apmterminals.com.ar/GestionClientes/vesselServices/getVessels", {
+    headers: {
+      "Accept": "*/*",
+      "Accept-Language": "es-419,es;q=0.9",
+      "Content-Type": "application/json",
+      "Referer": "https://apps.apmterminals.com.ar/GestionClientes/arribos",
+      "X-Requested-With": "XMLHttpRequest",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`La API de APM Terminal 4 respondió con estado ${res.status}`);
+  }
+  const lista = await res.json();
+  return lista
+    .filter((v) => v.vesselStatus !== "FINALIZADO" && v.vesselETA)
+    .map((v) => ({
+      buque: v.vesselName?.trim() || "",
+      terminal: "Terminal 4",
+      naviera: "",
+      procedencia: "",
+      eta: deFechaConHora(v.vesselETA),
+    }));
 }
 
-// Convierte una fecha ISO en UTC a hora de Buenos Aires (UTC-3),
-// en formato M/D/AAAA HH:mm (el mismo que usa el panel del TV)
-function aFechaLocal(isoUtc) {
-  const d = new Date(isoUtc);
-  const local = new Date(d.getTime() - 3 * 3600 * 1000);
-  const m = local.getUTCMonth() + 1;
-  const day = local.getUTCDate();
-  const y = local.getUTCFullYear();
-  const hh = String(local.getUTCHours()).padStart(2, "0");
-  const mm = String(local.getUTCMinutes()).padStart(2, "0");
-  return `${m}/${day}/${y} ${hh}:${mm}`;
+// ---------- Exolgan (vía NTL) ----------
+async function fetchExolgan() {
+  const res = await fetch("http://ntlweb.com/WebServices/ServicioControles.asmx/ListarArribos", {
+    method: "POST",
+    headers: {
+      "Accept": "application/json, text/javascript, */*; q=0.01",
+      "Accept-Language": "es-419,es;q=0.9",
+      "Content-Type": "application/json; charset=UTF-8",
+      "Origin": "http://ntlweb.com",
+      "Referer": "http://ntlweb.com/arribos.html",
+      "X-Requested-With": "XMLHttpRequest",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
+    body: JSON.stringify({ terminal: "1" }), // 1 = Exolgan en el sistema de NTL
+  });
+  if (!res.ok) {
+    throw new Error(`La API de NTL (Exolgan) respondió con estado ${res.status}`);
+  }
+  const json = await res.json();
+  const lista = json?.d || [];
+  return lista
+    .filter((v) => v.estado !== "Finalizado" && v.estado !== "Cancelado" && v.fechaETA)
+    .map((v) => ({
+      buque: (v.barco || "").trim(),
+      terminal: "Exolgan",
+      naviera: "",
+      procedencia: "",
+      eta: deFechaSinHora(v.fechaETA),
+    }));
 }
 
 async function main() {
-  const take = 100;
-  let skip = 0;
-  let total = Infinity;
-  const filas = [];
+  const filasTRP = await fetchTRP();
+  console.log(`TRP: ${filasTRP.length} arribos`);
 
-  while (skip < total) {
-    const json = await fetchPagina(skip, take);
-    const bloque = json.data;
-    total = bloque.totalCount;
+  const filasAPM = await fetchAPM();
+  console.log(`Terminal 4 (APM): ${filasAPM.length} arribos`);
 
-    for (const registro of bloque.data) {
-      const nombreBuque = registro.buque?.nombre?.trim() || "";
-      const procedencia = registro.puertos?.[0]?.ciudad?.nombre || "";
-      const naviera = registro.agencia?.nombre || "";
+  const filasExolgan = await fetchExolgan();
+  console.log(`Exolgan (NTL): ${filasExolgan.length} arribos`);
 
-      for (const mov of registro.movimientos || []) {
-        const terminal = terminalDestino(mov);
-        if (!terminal) continue;
-        if (!mov.fechaETA) continue;
+  const filas = [...filasTRP, ...filasAPM, ...filasExolgan];
 
-        filas.push({
-          buque: nombreBuque,
-          terminal,
-          naviera,
-          procedencia,
-          eta: aFechaLocal(mov.fechaETA),
-        });
-      }
-    }
-    skip += take;
-  }
-
-  console.log(`Encontrados ${filas.length} arribos en TRP / Terminal 4 / Exolgan`);
+  console.log(`Total combinado: ${filas.length} arribos en TRP / Terminal 4 / Exolgan`);
   await db.ref("datosBuques").set(filas);
   console.log("Firebase actualizado correctamente.");
   process.exit(0);
