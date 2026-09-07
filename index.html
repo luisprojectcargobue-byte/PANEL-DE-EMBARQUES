@@ -67,7 +67,7 @@
     box-shadow: 0 1px 3px rgba(15,27,42,0.06);
   }
   .search-bar svg{ flex-shrink:0; }
-  .search-bar input{ flex:1; border:none; outline:none; background: transparent; font-family: var(--sans); font-size: 16px; color: var(--ink); }
+  .search-bar input{ flex:1; border:none; outline:none; background: transparent; font-family: var(--sans); font-size: 18px; color: var(--ink); }
   .search-bar input::placeholder{ color: var(--ink-dim); }
   .search-clear{
     font-family: var(--mono); font-size: 12px; color: var(--ink-dim); background: var(--line);
@@ -102,36 +102,45 @@
 
   table{ width:100%; border-collapse: collapse; background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(15,27,42,0.06); }
   thead th{
-    text-align:left; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-dim);
-    padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 500;
+    text-align:left; font-size: 15px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-dim);
+    padding: 16px 18px; border-bottom: 1px solid var(--line); font-weight: 600;
     position: sticky; top: 0; background: var(--bg-panel); z-index: 1;
     cursor: pointer; user-select: none; white-space: nowrap;
   }
   thead th:hover{ color: var(--ink); }
-  thead th .arrow{ font-size: 10px; margin-left: 4px; opacity: 0.4; }
+  thead th .arrow{ font-size: 12px; margin-left: 4px; opacity: 0.4; }
   thead th.sort-active .arrow{ opacity: 1; color: var(--ink); }
-  tbody td{ padding: 14px 16px; font-size: 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tbody td{ padding: 18px; font-size: 20px; border-bottom: 1px solid var(--line); white-space: nowrap; }
   tbody tr:last-child td{ border-bottom:none; }
   .mono{ font-family: var(--mono); }
-  .buque-nombre{ font-weight: 600; }
+  .buque-nombre{ font-weight: 700; display:inline-flex; align-items:center; gap:10px; }
   .naviera{ color: var(--ink-dim); }
 
   .badge-terminal{
-    display:inline-flex; align-items:center; font-family: var(--mono); font-size: 12px; font-weight: 700;
-    color:#fff; padding: 5px 10px; border-radius: 4px;
+    display:inline-flex; align-items:center; font-family: var(--mono); font-size: 14px; font-weight: 700;
+    color:#fff; padding: 7px 14px; border-radius: 5px;
   }
   .badge-terminal.trp{ background: var(--blue); }
   .badge-terminal.t4{ background: var(--purple); }
   .badge-terminal.exo{ background: var(--teal); }
 
+  .logo-terminal{
+    display:inline-flex; align-items:center; justify-content:center;
+    width: 30px; height: 30px; border-radius: 7px; flex-shrink:0;
+    color:#fff; font-family: var(--mono); font-weight:800; font-size: 13px;
+  }
+  .logo-terminal.trp{ background: var(--blue); }
+  .logo-terminal.t4{ background: var(--purple); }
+  .logo-terminal.exo{ background: var(--teal); }
+
   .chk-cell{ text-align:center; }
   .chk-atendido{
-    width: 22px; height: 22px; border: 2px solid var(--line); border-radius: 5px; cursor: pointer;
+    width: 28px; height: 28px; border: 2px solid var(--line); border-radius: 6px; cursor: pointer;
     display:inline-flex; align-items:center; justify-content:center; background: #fff; transition: all 0.15s ease;
   }
   .chk-atendido:hover{ border-color: var(--ink-dim); }
   .chk-atendido.checked{ background: var(--teal); border-color: var(--teal); }
-  .chk-atendido.checked::after{ content:"✓"; color:#fff; font-size: 14px; font-weight: 700; }
+  .chk-atendido.checked::after{ content:"✓"; color:#fff; font-size: 18px; font-weight: 700; }
   tr.atendida{ opacity: 0.4; }
   tr.atendida td:not(.chk-cell){ text-decoration: line-through; }
 
@@ -319,6 +328,18 @@
     return `Llega en ${Math.floor(horas/24)} día${Math.floor(horas/24)===1?"":"s"}`;
   }
 
+  // Convierte "M/D/AAAA HH:mm" (formato interno) a "DD/MM/AAAA HH:mm" (formato de visualización)
+  function formatFechaDisplay(str){
+    const f = parseFecha(str);
+    if(isNaN(f.getTime())) return str;
+    const dd = String(f.getDate()).padStart(2,"0");
+    const mm = String(f.getMonth()+1).padStart(2,"0");
+    const yyyy = f.getFullYear();
+    const hh = String(f.getHours()).padStart(2,"0");
+    const min = String(f.getMinutes()).padStart(2,"0");
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+  }
+
   function claseTerminal(t){
     const s = (t||"").toLowerCase();
     if(s.includes("trp")) return "trp";
@@ -379,13 +400,14 @@
       tr.className = yaAtendido ? "atendida" : "";
 
       const nombreTerminal = cls === "trp" ? "TRP" : (cls === "t4" ? "Terminal 4" : "Exolgan");
+      const inicial = cls === "trp" ? "TRP" : (cls === "t4" ? "T4" : "EXO");
 
       tr.innerHTML = `
-        <td class="buque-nombre">${b.buque}</td>
+        <td class="buque-nombre"><span class="logo-terminal ${cls}">${inicial}</span>${b.buque}</td>
         <td><span class="badge-terminal ${cls}">${nombreTerminal}</span></td>
         <td class="naviera">${b.naviera}</td>
         <td>${b.procedencia}</td>
-        <td class="mono">${b.eta}<div class="footer-note" style="text-align:left;margin-top:2px;">${textoCountdown(b.horas)}</div></td>
+        <td class="mono">${formatFechaDisplay(b.eta)}<div class="footer-note" style="text-align:left;margin-top:2px;">${textoCountdown(b.horas)}</div></td>
         <td class="chk-cell"><div class="chk-atendido ${yaAtendido ? "checked" : ""}" data-rowid="${rowId}"></div></td>
       `;
       tbody.appendChild(tr);
