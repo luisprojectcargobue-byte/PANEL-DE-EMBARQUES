@@ -32,7 +32,36 @@ function deFechaSinHora(str) {
   return `${mm}/${dd}/${yyyy} 00:00`;
 }
 
+// Convierte "d/m/aaaa" o "dd/mm/aaaa" (sin hora) a "M/D/AAAA" (sin hora, formato interno)
+function soloFecha(str) {
+  if (!str) return "";
+  const [dd, mm, yyyy] = str.trim().split("/").map(Number);
+  if (!dd || !mm || !yyyy) return "";
+  return `${mm}/${dd}/${yyyy}`;
+}
+
 // ---------- TRP ----------
+async function fetchTRPForzosoMap() {
+  const res = await fetch("https://www.trp.com.ar/api/public/vessels/freeday", {
+    headers: {
+      "accept": "*/*",
+      "accept-language": "es-419,es;q=0.9",
+      "referer": "https://www.trp.com.ar/cronogramas/importacion",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`La API de TRP (freeday) respondió con estado ${res.status}`);
+  }
+  const json = await res.json();
+  const filas = json?.payload?.data || [];
+  const mapa = new Map();
+  filas.forEach((f) => {
+    if (f.vencForzoso) mapa.set(`${f.shipName}|${f.eta}`, f.vencForzoso);
+  });
+  return mapa;
+}
+
 async function fetchTRP() {
   const res = await fetch("https://www.trp.com.ar/api/public/vessels/schedule", {
     headers: {
@@ -47,13 +76,19 @@ async function fetchTRP() {
   }
   const json = await res.json();
   const filas = json?.payload?.data || [];
-  return filas.map((f) => ({
-    buque: f.shipName || "",
-    terminal: "TRP",
-    naviera: f.lineOperator || "",
-    procedencia: "",
-    eta: deFechaConHora(f.eta),
-  }));
+  const mapaForzoso = await fetchTRPForzosoMap();
+  return filas.map((f) => {
+    const forzosoRaw = mapaForzoso.get(`${f.shipName}|${f.eta}`) || "";
+    return {
+      buque: f.shipName || "",
+      terminal: "TRP",
+      naviera: f.lineOperator || "",
+      procedencia: "",
+      eta: deFechaConHora(f.eta),
+      forzoso: forzosoRaw ? deFechaConHora(forzosoRaw) : "",
+      aperturaStacking: "", // TRP no publica este dato en su API
+    };
+  });
 }
 
 // ---------- Terminal 4 (APM) ----------
@@ -80,6 +115,8 @@ async function fetchAPM() {
       naviera: "",
       procedencia: "",
       eta: deFechaConHora(v.vesselETA),
+      forzoso: soloFecha(v.vesselDueDateT1), // "Venc. T1" = forzoso en Terminal 4
+      aperturaStacking: soloFecha(v.vesselStartReceptionDry), // fecha de inicio de recepción = apertura de stacking
     }));
 }
 
@@ -111,6 +148,8 @@ async function fetchExolgan() {
       naviera: "",
       procedencia: "",
       eta: deFechaSinHora(v.fechaETA),
+      forzoso: soloFecha(v.fechaForzoso),
+      aperturaStacking: "", // NTL no publica este dato para Exolgan
     }));
 }
 
