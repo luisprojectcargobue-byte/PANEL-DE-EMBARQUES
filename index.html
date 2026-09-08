@@ -95,12 +95,13 @@
   .panel-title::after{ content:""; flex:1; height:1px; background: var(--line); }
 
   .table-scroll{
-    max-height: calc(100vh - 300px); overflow-y: auto; border-radius: 8px;
-    scrollbar-width: none; -ms-overflow-style: none;
+    max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: auto; border-radius: 8px;
   }
-  .table-scroll::-webkit-scrollbar{ display:none; }
+  .table-scroll::-webkit-scrollbar:vertical{ display:none; }
+  .table-scroll::-webkit-scrollbar{ height: 10px; }
+  .table-scroll::-webkit-scrollbar-thumb{ background: var(--line); border-radius: 6px; }
 
-  table{ width:100%; border-collapse: collapse; background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(15,27,42,0.06); }
+  table{ width: max-content; min-width:100%; border-collapse: collapse; background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(15,27,42,0.06); }
   thead th{
     text-align:left; font-size: 15px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-dim);
     padding: 16px 18px; border-bottom: 1px solid var(--line); font-weight: 600;
@@ -221,6 +222,8 @@
         <th class="sortable" data-field="naviera">Naviera<span class="arrow">↕</span></th>
         <th class="sortable" data-field="procedencia">Procedencia<span class="arrow">↕</span></th>
         <th class="sortable" data-field="eta">ETA<span class="arrow">↕</span></th>
+        <th class="sortable" data-field="forzoso">Forzoso<span class="arrow">↕</span></th>
+        <th class="sortable" data-field="aperturaStacking">Apertura Stacking<span class="arrow">↕</span></th>
         <th>✓</th>
       </tr>
     </thead>
@@ -328,7 +331,15 @@
     return `Llega en ${Math.floor(horas/24)} día${Math.floor(horas/24)===1?"":"s"}`;
   }
 
-  // Convierte "M/D/AAAA HH:mm" (formato interno) a "DD/MM/AAAA HH:mm" (formato de visualización)
+  // Convierte "M/D/AAAA" (sin hora) a "DD/MM/AAAA" para mostrar — o "—" si está vacío
+  function formatFechaSolo(str){
+    if(!str || !str.trim()) return "—";
+    const [m,d,y] = str.trim().split("/").map(Number);
+    if(!m || !d || !y) return "—";
+    return `${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${y}`;
+  }
+
+
   function formatFechaDisplay(str){
     const f = parseFecha(str);
     if(isNaN(f.getTime())) return str;
@@ -350,8 +361,10 @@
 
   const sortState = { field:null, dir:1 };
   function compararPorCampo(a, b, campo, dir){
-    if(campo === "eta"){
-      return (parseFecha(a.eta) - parseFecha(b.eta)) * dir;
+    if(["eta","forzoso","aperturaStacking"].includes(campo)){
+      const va = a[campo] ? parseFecha(a[campo]) : new Date(8640000000000000); // vacío va al final
+      const vb = b[campo] ? parseFecha(b[campo]) : new Date(8640000000000000);
+      return (va - vb) * dir;
     }
     const va = (a[campo] || "").toString().toLowerCase();
     const vb = (b[campo] || "").toString().toLowerCase();
@@ -408,13 +421,15 @@
         <td class="naviera">${b.naviera}</td>
         <td>${b.procedencia}</td>
         <td class="mono">${formatFechaDisplay(b.eta)}<div class="footer-note" style="text-align:left;margin-top:2px;">${textoCountdown(b.horas)}</div></td>
+        <td class="mono">${formatFechaSolo(b.forzoso)}</td>
+        <td class="mono">${formatFechaSolo(b.aperturaStacking)}</td>
         <td class="chk-cell"><div class="chk-atendido ${yaAtendido ? "checked" : ""}" data-rowid="${rowId}"></div></td>
       `;
       tbody.appendChild(tr);
     });
 
     if(buques.length === 0){
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--ink-dim); padding:24px;">Todavía no hay buques cargados — usá el botón "Cargar datos"</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--ink-dim); padding:24px;">Todavía no hay buques cargados — usá el botón "Cargar datos"</td></tr>`;
     }
   }
 
