@@ -332,9 +332,13 @@
   // Convierte "M/D/AAAA" (sin hora) a "DD/MM/AAAA" para mostrar — o "—" si está vacío
   function formatFechaSolo(str){
     if(!str || !str.trim()) return "—";
-    const [m,d,y] = str.trim().split("/").map(Number);
+    const partes = str.trim().split(" ");
+    const fechaParte = partes[0];       // "M/D/AAAA"
+    const horaParte = partes[1] || "";  // "HH:mm", si la hay
+    const [m,d,y] = fechaParte.split("/").map(Number);
     if(!m || !d || !y) return "—";
-    return `${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${y}`;
+    const fechaFmt = `${String(d).padStart(2,"0")}/${String(m).padStart(2,"0")}/${y}`;
+    return horaParte ? `${fechaFmt} ${horaParte}` : fechaFmt;
   }
 
 
