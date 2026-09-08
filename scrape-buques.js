@@ -41,6 +41,13 @@ function soloFecha(str) {
 }
 
 // ---------- TRP ----------
+// Clave para cruzar buque+fecha entre los dos feeds de TRP, ignorando la hora exacta
+// (puede haber pequeñas diferencias de minutos entre el cronograma y el free storage)
+function claveBuqueFecha(nombre, fechaHora){
+  const soloFechaStr = (fechaHora || "").trim().split(" ")[0]; // "dd/mm/aaaa"
+  return `${(nombre || "").trim().toUpperCase()}|${soloFechaStr}`;
+}
+
 async function fetchTRPForzosoMap() {
   const res = await fetch("https://www.trp.com.ar/api/public/vessels/freeday", {
     headers: {
@@ -57,7 +64,7 @@ async function fetchTRPForzosoMap() {
   const filas = json?.payload?.data || [];
   const mapa = new Map();
   filas.forEach((f) => {
-    if (f.vencForzoso) mapa.set(`${f.shipName}|${f.eta}`, f.vencForzoso);
+    if (f.vencForzoso) mapa.set(claveBuqueFecha(f.shipName, f.eta), f.vencForzoso);
   });
   return mapa;
 }
@@ -77,8 +84,10 @@ async function fetchTRP() {
   const json = await res.json();
   const filas = json?.payload?.data || [];
   const mapaForzoso = await fetchTRPForzosoMap();
-  return filas.map((f) => {
-    const forzosoRaw = mapaForzoso.get(`${f.shipName}|${f.eta}`) || "";
+  let matcheados = 0;
+  const resultado = filas.map((f) => {
+    const forzosoRaw = mapaForzoso.get(claveBuqueFecha(f.shipName, f.eta)) || "";
+    if (forzosoRaw) matcheados++;
     return {
       buque: f.shipName || "",
       terminal: "TRP",
@@ -89,6 +98,8 @@ async function fetchTRP() {
       aperturaStacking: "", // TRP no publica este dato en su API
     };
   });
+  console.log(`  (TRP forzoso: ${matcheados} de ${filas.length} buques cruzados, ${mapaForzoso.size} disponibles en el feed de free storage)`);
+  return resultado;
 }
 
 // ---------- Terminal 4 (APM) ----------
