@@ -27,10 +27,14 @@
   const iframe = document.getElementById("pantalla");
 
   function mostrarPagina(){
-    // El "?t=..." al final evita que el navegador use una copia vieja guardada en caché
-    iframe.src = paginas[indice].archivo + "?t=" + Date.now();
+    // Si no hay internet en este momento, no cambiamos de pantalla (se queda con
+    // la que ya estaba mostrando) — así no se ve una pantalla de error en el TV.
+    if(navigator.onLine){
+      // El "?t=..." al final evita que el navegador use una copia vieja guardada en caché
+      iframe.src = paginas[indice].archivo + "?t=" + Date.now();
+      indice = (indice + 1) % paginas.length;
+    }
     const espera = paginas[indice].segundos * 1000;
-    indice = (indice + 1) % paginas.length;
     setTimeout(mostrarPagina, espera);
   }
 
@@ -39,10 +43,33 @@
   // ---------- Auto-recarga del lanzador ----------
   // Así, si se actualiza este mismo archivo (ej. cambian los tiempos de rotación),
   // se aplica solo, sin que nadie tenga que ir a la compu a apretar F5.
+  // Antes de recargar, chequea que haya internet — si no hay, espera y reintenta
+  // solo cada 30 segundos, en vez de navegar a la pantalla de error de Chrome
+  // (que no se recupera sola cuando vuelve la conexión).
   const MINUTOS_ENTRE_RECARGAS = 20;
-  setTimeout(() => {
+
+  function intentarRecargar(){
+    if(navigator.onLine){
+      location.href = location.pathname + "?t=" + Date.now();
+    } else {
+      setTimeout(intentarRecargar, 30 * 1000);
+    }
+  }
+  setTimeout(intentarRecargar, MINUTOS_ENTRE_RECARGAS * 60 * 1000);
+
+  // ---------- Recargar apenas vuelva la conexión ----------
+  // Así no hay que esperar al próximo ciclo de rotación o a los 20 minutos:
+  // en cuanto el navegador detecta que volvió el WiFi, trae la versión más nueva.
+  window.addEventListener("online", () => {
     location.href = location.pathname + "?t=" + Date.now();
-  }, MINUTOS_ENTRE_RECARGAS * 60 * 1000);
+  });
+
+  // ---------- Service Worker (guarda copia offline de las páginas) ----------
+  // Si se corta el WiFi, el navegador va a mostrar la última versión guardada
+  // en vez de su pantalla de error.
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
 </script>
 
 </body>

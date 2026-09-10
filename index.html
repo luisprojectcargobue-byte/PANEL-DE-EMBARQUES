@@ -567,6 +567,11 @@
   setInterval(tickClock, 1000);
   setInterval(() => { render(); aplicarFiltros(); }, 60*1000);
   setupAutoScroll("scroll-buques");
+
+  // ---------- Service Worker (guarda copia offline de esta página) ----------
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
 </script>
 
 </body>

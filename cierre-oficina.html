@@ -215,7 +215,25 @@
     </div>
   </div>
 
+  <!-- Firebase (sincroniza los contactos esenciales entre computadoras) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
 <script>
+  // Misma configuración de Firebase que usa el panel principal (index.html)
+  const firebaseConfig = {
+    apiKey: "AIzaSyC9I2eTpqrXiXoiOvw3fexYm2nP1HfIcyQ",
+    authDomain: "panel-del-embarque.firebaseapp.com",
+    databaseURL: "https://panel-del-embarque-default-rtdb.firebaseio.com",
+    projectId: "panel-del-embarque",
+    storageBucket: "panel-del-embarque.firebasestorage.app",
+    messagingSenderId: "592584059076",
+    appId: "1:592584059076:web:5b50c7d2140cc765c08191"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const dbFirebase = firebase.database();
+  const refContactos = dbFirebase.ref("contactosEsenciales");
+
   // ---------- Reloj ----------
   function tickClock(){
     const now = new Date();
@@ -295,13 +313,13 @@
   renderFeriados();
 
   // ============================================================
-  // CONTACTOS DE GUARDIA — se cargan y editan desde el botón, quedan guardados
+  // CONTACTOS ESENCIALES — sincronizados por Firebase entre todas las compus
   // ============================================================
+  let textoContactos = "";
+
   function renderContactos(){
     const cont = document.getElementById("contactos");
-    let texto = "";
-    try{ texto = localStorage.getItem("cierre_contactos") || ""; } catch(e){}
-    const lineas = texto.split("\n").map(l => l.trim()).filter(l => l);
+    const lineas = textoContactos.split("\n").map(l => l.trim()).filter(l => l);
 
     if(lineas.length === 0){
       cont.innerHTML = `<div class="vacio">Todavía no cargaste contactos — usá el botón "Editar contactos"</div>`;
@@ -320,21 +338,30 @@
       cont.appendChild(div);
     });
   }
-  renderContactos();
+
+  // Escucha cambios en tiempo real — lo que carga una compu lo ven todas al instante
+  refContactos.on("value", (snap) => {
+    textoContactos = snap.val() || "";
+    renderContactos();
+  });
 
   const modalContactos = document.getElementById("modal-contactos-overlay");
   const inputContactos = document.getElementById("input-contactos");
   document.getElementById("btn-editar-contactos").addEventListener("click", () => {
-    try{ inputContactos.value = localStorage.getItem("cierre_contactos") || ""; } catch(e){}
+    inputContactos.value = textoContactos;
     modalContactos.classList.add("show");
   });
   document.getElementById("btn-cerrar-contactos").addEventListener("click", () => modalContactos.classList.remove("show"));
   modalContactos.addEventListener("click", (ev) => { if(ev.target === modalContactos) modalContactos.classList.remove("show"); });
   document.getElementById("btn-guardar-contactos").addEventListener("click", () => {
-    try{ localStorage.setItem("cierre_contactos", inputContactos.value); } catch(e){}
-    renderContactos();
+    refContactos.set(inputContactos.value);
     modalContactos.classList.remove("show");
   });
+
+  // ---------- Service Worker (guarda copia offline de esta página) ----------
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
 </script>
 
 </body>
